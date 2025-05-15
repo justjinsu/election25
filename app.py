@@ -24,7 +24,7 @@ PARTY_COLORS = {
 # ---------------------------------------------------------------------#
 # 1. Load Excel
 # ---------------------------------------------------------------------#
-EXCEL_PATH = Path(__file__).with_suffix("").parent / "climate_data.xlsx"
+EXCEL_PATH = Path(__file__).parent / "data" / "climate_data.xlsx"
 
 @st.cache_data
 def load_sheets(path: Path) -> dict[str, pd.DataFrame]:
@@ -213,8 +213,8 @@ with TABS[4]:
 # ---------------------------------------------------------------------#
 st.sidebar.header("ℹ️ 정보")
 st.sidebar.write(
-    "이 대시보드는 Excel 파일 **climate_data.xlsx**의 데이터를 사용합니다. "
-    "시트 이름이나 구조가 변하면 코드도 함께 수정해 주세요."
+    "이 대시보드는 **data/climate_data.xlsx**의 데이터를 사용합니다. "
+    "경로 또는 파일 이름이 바뀌면 코드의 `EXCEL_PATH`도 함께 수정해 주세요."
 )
 
 st.markdown(
