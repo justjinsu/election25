@@ -36,31 +36,53 @@ def load_sheets(path: Path) -> dict[str, pd.DataFrame]:
     xls = pd.ExcelFile(path)
     return {name: pd.read_excel(xls, sheet_name=name) for name in xls.sheet_names}
 
+
 sheets = load_sheets(EXCEL_PATH)
 
+# --- Debug sidebar: show all sheet names -----------------------------#
+with st.sidebar.expander("📄 엑셀 시트 목록", expanded=False):
+    st.write(list(sheets.keys()))
+
 def find_sheet(keywords: list[str]) -> pd.DataFrame:
-    """Return the first sheet whose name contains any keyword."""
+    """
+    Return the first sheet whose name contains ANY of the given keywords.
+    If nothing matches, raise a descriptive error listing available sheets.
+    """
     for name, df in sheets.items():
         if any(k in name for k in keywords):
             return df.copy()
-    return pd.DataFrame()
+
+    kw = ", ".join(keywords)
+    st.error(
+        f"❌ 시트 이름에 [{kw}] 중 하나도 포함되지 않았습니다.\n\n"
+        f"현재 엑셀에는 다음 시트가 있습니다:\n{list(sheets.keys())}"
+    )
+    st.stop()
 
 # ---------------------------------------------------------------------#
 # 2. Data wrangling
 # ---------------------------------------------------------------------#
 # 2‑1. Emissions ──────────────────────────────────────────────────────
-em_raw = find_sheet(["배출"])
-if em_raw.empty:
-    st.error("❌ '배출'이라는 단어가 포함된 시트를 찾지 못했습니다.")
-    st.stop()
+EMISSION_KEYWORDS = ["배출", "emission", "총배출"]
+em_sheet_name = next(
+    (name for name in sheets if any(k in name for k in EMISSION_KEYWORDS)),
+    None,
+)
 
-if "정당" not in em_raw.columns:           # wide → long
-    emissions_df = em_raw.melt(id_vars="부문", var_name="정당", value_name="값")
-else:                                       # already long
-    emissions_df = em_raw.rename(columns=str).copy()
+if em_sheet_name:
+    em_raw = sheets[em_sheet_name]
 
-sectors = [s for s in emissions_df["부문"].unique() if s != "총배출"]
-parties  = emissions_df["정당"].unique().tolist()
+    # wide → long 변환 여부 판단
+    if "정당" not in em_raw.columns:
+        emissions_df = em_raw.melt(id_vars="부문", var_name="정당", value_name="값")
+    else:
+        emissions_df = em_raw.rename(columns=str).copy()
+else:
+    # 시트가 없으면 빈 DF로 설정하고 이후 탭에서 안내만 표시
+    emissions_df = pd.DataFrame()
+
+sectors = [s for s in emissions_df["부문"].unique() if s != "총배출"] if not emissions_df.empty else []
+parties  = emissions_df["정당"].unique().tolist() if not emissions_df.empty else []
 
 # 2‑2. Energy mix ─────────────────────────────────────────────────────
 en_raw = find_sheet(["에너지믹스"])
@@ -99,50 +121,57 @@ TABS = st.tabs(["🌍 배출량/감축", "🔍 부문별", "⚡ 에너지�
 with TABS[0]:
     st.subheader("온실가스 총배출량 및 감축 목표")
 
-    total_df = (emissions_df[emissions_df["부문"] == "총배출"]
-                .pivot(index="정당", columns="부문", values="값")
-                .reset_index()[["정당", "총배출"]])
+    if emissions_df.empty:
+        st.info("❕ 엑셀 파일에 온실가스 배출량 시트가 없어 그래프를 표시할 수 없습니다.")
+    else:
+        total_df = (emissions_df[emissions_df["부문"] == "총배출"]
+                    .pivot(index="정당", columns="부문", values="값")
+                    .reset_index()[["정당", "총배출"]])
 
-    base_val = total_df.loc[total_df["정당"] == BASELINE_PARTY, "총배출"].values[0]
-    total_df["감축률(%)"] = 100 * (1 - total_df["총배출"] / base_val)
+        base_val = total_df.loc[total_df["정당"] == BASELINE_PARTY, "총배출"].values[0]
+        total_df["감축률(%)"] = 100 * (1 - total_df["총배출"] / base_val)
 
-    fig = px.bar(
-        total_df.sort_values("감축률(%)", ascending=False),
-        x="정당", y="총배출",
-        color="정당", text="감축률(%)",
-        color_discrete_map=cmap(total_df["정당"].tolist()),
-        labels={"총배출": "온실가스 총배출량 (백만톤 CO₂eq)"}, height=500,
-    )
-    fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-    st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            total_df.sort_values("감축률(%)", ascending=False),
+            x="정당", y="총배출",
+            color="정당", text="감축률(%)",
+            color_discrete_map=cmap(total_df["정당"].tolist()),
+            labels={"총배출": "온실가스 총배출량 (백만톤 CO₂eq)"}, height=500,
+        )
+        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
 # Tab 1 : Sectoral emissions
 # ────────────────────────────────────────────────────────────────────#
 with TABS[1]:
     st.subheader("부문별 온실가스 배출량")
-    sel_parties = st.multiselect("비교할 정당", parties, default=parties[:3])
-    sel_sector  = st.selectbox("부문 선택", ["전체"] + sectors)
 
-    if sel_sector == "전체":
-        plot_df = emissions_df.query("정당 in @sel_parties & 부문 != '총배출'")
-        fig = px.bar(
-            plot_df, x="정당", y="값", color="부문",
-            barmode="group", height=550,
-            color_discrete_sequence=px.colors.qualitative.Set2,
-            labels={"값": "배출량 (백만톤 CO₂eq)"}
-        )
+    if emissions_df.empty:
+        st.info("❕ 배출량 시트가 없어 부문별 분석을 건너뜁니다.")
     else:
-        plot_df = emissions_df.query("정당 in @sel_parties & 부문 == @sel_sector")
-        fig = px.bar(
-            plot_df, x="정당", y="값", color="정당",
-            text="값", height=500,
-            color_discrete_map=cmap(sel_parties),
-            labels={"값": f"{sel_sector} 배출량 (백만톤 CO₂eq)"}
-        )
-        fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+        sel_parties = st.multiselect("비교할 정당", parties, default=parties[:3])
+        sel_sector  = st.selectbox("부문 선택", ["전체"] + sectors)
 
-    st.plotly_chart(fig, use_container_width=True)
+        if sel_sector == "전체":
+            plot_df = emissions_df.query("정당 in @sel_parties & 부문 != '총배출'")
+            fig = px.bar(
+                plot_df, x="정당", y="값", color="부문",
+                barmode="group", height=550,
+                color_discrete_sequence=px.colors.qualitative.Set2,
+                labels={"값": "배출량 (백만톤 CO₂eq)"}
+            )
+        else:
+            plot_df = emissions_df.query("정당 in @sel_parties & 부문 == @sel_sector")
+            fig = px.bar(
+                plot_df, x="정당", y="값", color="정당",
+                text="값", height=500,
+                color_discrete_map=cmap(sel_parties),
+                labels={"값": f"{sel_sector} 배출량 (백만톤 CO₂eq)"}
+            )
+            fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+
+        st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
 # Tab 2 : Energy mix
