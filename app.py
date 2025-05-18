@@ -13,10 +13,10 @@ NDC_PARTY      = "2030 NDC"
 
 # 정당별 대표색 (필요에 따라 추가)
 PARTY_COLORS = {
-    "국민의 힘":   "#E61E2B",
-    "더불어민주당": "#004EA2",
-    "사회대전환":   "#8B4513",
-    "개혁신당":     "#FF6B6B",
+    "국민의 힘":   "#E61E2B",  # 빨강
+    "더불어민주당": "#0066FF",  # 파랑
+    "개혁신당":     "#FF8800",  # 주황
+    "민주노동당":   "#FFD700",  # 노랑
     BASELINE_PARTY: "#999999",
     NDC_PARTY:      "#000000",
 }
@@ -240,20 +240,23 @@ with TABS[0]:
                 value_col = next(col for col in numeric_cols if col not in ["에너지원"])
                 y_label   = value_col
 
+            # create a single‑column label so the scenario shows as one bar
+            df_plot = df_plot.assign(scn_label=scn)
+
             fig = px.bar(
                 df_plot,
-                x="에너지원",
+                x="scn_label",           # one bar per scenario
                 y=value_col,
                 color="에너지원",
-                barmode="stack",
                 color_discrete_map=ENERGY_COLORS,
-                title=scn,
+                barmode="stack",
                 height=450
             )
             if value_col == "비중":
                 fig.update_yaxes(range=[0, 100])
+            fig.update_xaxes(title="")
             fig.update_yaxes(title=y_label)
-            fig.update_layout(showlegend=False)
+            fig.update_layout(showlegend=False, title=scn)
             col.plotly_chart(fig, use_container_width=True)
 
         c1, c2, c3 = st.columns(3)
