@@ -109,11 +109,7 @@ else:
                                   value_name="비중"))
 
 # ---- If the sheet uses '발전량' instead of '비중', convert to share (%) ----
-if "발전량" in energy_df.columns and "비중" not in energy_df.columns:
-    # rename plural header variants like '발전량(TWh)' → '발전량'
-    energy_df = energy_df.rename(columns=lambda c: c.replace("(TWh)", "").strip())
-    total_per_scn = energy_df.groupby("시나리오")["발전량"].transform("sum")
-    energy_df["비중"] = (energy_df["발전량"] / total_per_scn * 100).round(2)
+# (Removed automatic share conversion as per instructions)
 
 # 2‑3. Temperature pathways ───────────────────────────────────────────
 tp_raw = find_sheet(["온도경로"])
@@ -189,6 +185,21 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
     fig.update_layout(title=title, yaxis_title="", xaxis_title="정책 강도")
     st.plotly_chart(fig, use_container_width=True)
 
+# ---------------------------------------------------------------------#
+# 3. Layout
+# ---------------------------------------------------------------------#
+st.markdown("<h1 style='text-align:center;'>2025 대선 기후 정책 종합 분석</h1>",
+            unsafe_allow_html=True)
+
+# Top‑level tabs
+TABS = st.tabs([
+    "⚡ 에너지믹스",
+    "🌡 온도경로",
+    "📊 정책-대선",
+    "📊 정책-지난총선",
+    "📊 정책-지난대선"
+])
+
 # ────────────────────────────────────────────────────────────────────#
 # Tab 0 : Energy mix (stacked bars 2018 ‑ 2035 ‑ selected)
 # ────────────────────────────────────────────────────────────────────#
@@ -199,12 +210,12 @@ with TABS[0]:
         st.info("에너지 믹스 시트를 찾지 못했습니다.")
     else:
         scenarios = energy_df["시나리오"].unique().tolist()
+        base_scn   = "정부(실적)-2018"
+        target_scn = "정부(계획)-2040"
         if base_scn not in scenarios or target_scn not in scenarios:
             st.error("에너지 믹스 시트에 기준·목표 시나리오 이름이 없습니다. "
                      "현재 시나리오 목록: " + ", ".join(scenarios))
             st.stop()
-        base_scn   = "정부(실적)-2018"
-        target_scn = "정부(계획)-2040"
 
         selectable = [s for s in scenarios if s not in [base_scn, target_scn]]
 
