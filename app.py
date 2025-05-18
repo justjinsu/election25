@@ -84,6 +84,20 @@ else:
 sectors = [s for s in emissions_df["부문"].unique() if s != "총배출"] if not emissions_df.empty else []
 parties  = emissions_df["정당"].unique().tolist() if not emissions_df.empty else []
 
+# Color palette for energy sources (stacked bar)
+ENERGY_COLORS = {
+    "석탄":   "#4B5563",
+    "LNG":    "#60A5FA",
+    "원자력": "#F59E0B",
+    "태양광": "#FBBF24",
+    "풍력":   "#34D399",
+    "수력":   "#3B82F6",
+    "바이오": "#A855F7",
+    "연료전지": "#10B981",
+    "기타":   "#9CA3AF",
+    "청정수소/암모니아": "#06B6D4",
+}
+
 # 2‑2. Energy mix ─────────────────────────────────────────────────────
 en_raw = find_sheet(["에너지믹스"])
 if en_raw.empty:
@@ -93,6 +107,13 @@ else:
                  else en_raw.melt(id_vars="에너지원",
                                   var_name="시나리오",
                                   value_name="비중"))
+
+# ---- If the sheet uses '발전량' instead of '비중', convert to share (%) ----
+if "발전량" in energy_df.columns and "비중" not in energy_df.columns:
+    # rename plural header variants like '발전량(TWh)' → '발전량'
+    energy_df = energy_df.rename(columns=lambda c: c.replace("(TWh)", "").strip())
+    total_per_scn = energy_df.groupby("시나리오")["발전량"].transform("sum")
+    energy_df["비중"] = (energy_df["발전량"] / total_per_scn * 100).round(2)
 
 # 2‑3. Temperature pathways ───────────────────────────────────────────
 tp_raw = find_sheet(["온도경로"])
@@ -108,99 +129,112 @@ def cmap(parties: list[str]) -> dict[str, str]:
     return {p: PARTY_COLORS.get(p, "#808080") for p in parties}
 
 # ---------------------------------------------------------------------#
-# 3. Layout
+# Helper for policy scatter chart
 # ---------------------------------------------------------------------#
-st.markdown("<h1 style='text-align:center;'>2025 대선 기후 정책 종합 분석</h1>",
-            unsafe_allow_html=True)
+def load_policy_df(sheet_keywords: list[str]) -> pd.DataFrame:
+    """
+    Return policy DataFrame in long format:
+    columns = ['category','party','level','description']
+    """
+    try:
+        df_raw = find_sheet(sheet_keywords)
+    except st.runtime.scriptrunner.StopException:  # find_sheet already showed error
+        return pd.DataFrame()
 
-TABS = st.tabs(["🌍 배출량/감축", "🔍 부문별", "⚡ 에너지믹스", "🌡 온도경로", "📊 정책"])
+    # Expect either already long‑form, or wide JSON‑like sheet
+    if set(["category", "party", "level", "description"]).issubset(df_raw.columns):
+        return df_raw.copy()
+
+    # Otherwise, try to normalize a nested JSON style
+    records = []
+    for _, row in df_raw.iterrows():
+        cat = row["category"] if "category" in df_raw.columns else row.iloc[0]
+        parties_dict = row["parties"] if "parties" in df_raw.columns else None
+        if isinstance(parties_dict, dict):
+            for p, d in parties_dict.items():
+                records.append({
+                    "category": cat,
+                    "party": p,
+                    "level": d.get("level"),
+                    "description": d.get("description")
+                })
+    return pd.DataFrame(records)
+
+
+def policy_scatter(policy_df: pd.DataFrame, title: str):
+    if policy_df.empty:
+        st.info("정책 데이터를 찾지 못했습니다.")
+        return
+
+    # 정당 필터
+    all_parties = sorted(policy_df["party"].unique())
+    party_filter = st.radio("정당 선택", ["전체"] + all_parties,
+                            horizontal=True, key=f"filter_{title}")
+    if party_filter != "전체":
+        policy_df = policy_df.query("party == @party_filter")
+
+    fig = px.scatter(
+        policy_df,
+        x="level",
+        y="category",
+        color="party",
+        hover_data=["description"],
+        color_discrete_map=PARTY_COLORS,
+        height=700,
+    )
+    fig.update_traces(marker_size=16)
+    fig.update_xaxes(range=[-2, 3],
+                     tickvals=[-2, -1, 0, 1, 2, 3],
+                     ticktext=["완화", "-1", "유지", "강화(약)", "강화(중)", "강화(강)"])
+    fig.update_layout(title=title, yaxis_title="", xaxis_title="정책 강도")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 0 : Total emissions & reduction
+# Tab 0 : Energy mix (stacked bars 2018 ‑ 2035 ‑ selected)
 # ────────────────────────────────────────────────────────────────────#
 with TABS[0]:
-    st.subheader("온실가스 총배출량 및 감축 목표")
-
-    if emissions_df.empty:
-        st.info("❕ 엑셀 파일에 온실가스 배출량 시트가 없어 그래프를 표시할 수 없습니다.")
-    else:
-        total_df = (emissions_df[emissions_df["부문"] == "총배출"]
-                    .pivot(index="정당", columns="부문", values="값")
-                    .reset_index()[["정당", "총배출"]])
-
-        base_val = total_df.loc[total_df["정당"] == BASELINE_PARTY, "총배출"].values[0]
-        total_df["감축률(%)"] = 100 * (1 - total_df["총배출"] / base_val)
-
-        fig = px.bar(
-            total_df.sort_values("감축률(%)", ascending=False),
-            x="정당", y="총배출",
-            color="정당", text="감축률(%)",
-            color_discrete_map=cmap(total_df["정당"].tolist()),
-            labels={"총배출": "온실가스 총배출량 (백만톤 CO₂eq)"}, height=500,
-        )
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        st.plotly_chart(fig, use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────#
-# Tab 1 : Sectoral emissions
-# ────────────────────────────────────────────────────────────────────#
-with TABS[1]:
-    st.subheader("부문별 온실가스 배출량")
-
-    if emissions_df.empty:
-        st.info("❕ 배출량 시트가 없어 부문별 분석을 건너뜁니다.")
-    else:
-        sel_parties = st.multiselect("비교할 정당", parties, default=parties[:3])
-        sel_sector  = st.selectbox("부문 선택", ["전체"] + sectors)
-
-        if sel_sector == "전체":
-            plot_df = emissions_df.query("정당 in @sel_parties & 부문 != '총배출'")
-            fig = px.bar(
-                plot_df, x="정당", y="값", color="부문",
-                barmode="group", height=550,
-                color_discrete_sequence=px.colors.qualitative.Set2,
-                labels={"값": "배출량 (백만톤 CO₂eq)"}
-            )
-        else:
-            plot_df = emissions_df.query("정당 in @sel_parties & 부문 == @sel_sector")
-            fig = px.bar(
-                plot_df, x="정당", y="값", color="정당",
-                text="값", height=500,
-                color_discrete_map=cmap(sel_parties),
-                labels={"값": f"{sel_sector} 배출량 (백만톤 CO₂eq)"}
-            )
-            fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ────────────────────────────────────────────────────────────────────#
-# Tab 2 : Energy mix
-# ────────────────────────────────────────────────────────────────────#
-with TABS[2]:
-    st.subheader("에너지 믹스 분석")
+    st.subheader("에너지 믹스 – 2018 vs 2035 vs 선택 시나리오")
 
     if energy_df.empty:
         st.info("에너지 믹스 시트를 찾지 못했습니다.")
     else:
         scenarios = energy_df["시나리오"].unique().tolist()
-        sel_scenario = st.selectbox("시나리오", scenarios)
-        scenario_df  = energy_df.query("시나리오 == @sel_scenario")
+        if base_scn not in scenarios or target_scn not in scenarios:
+            st.error("에너지 믹스 시트에 기준·목표 시나리오 이름이 없습니다. "
+                     "현재 시나리오 목록: " + ", ".join(scenarios))
+            st.stop()
+        base_scn   = "정부(실적)-2018"
+        target_scn = "정부(계획)-2040"
 
-        # ―― 원형 그래프(도넛)로 고정 ――
-        fig = px.pie(
-            scenario_df,
-            names="에너지원",
-            values="비중",
-            title=f"{sel_scenario} 에너지 믹스",
-            hole=0.3  # 도넛형
-        )
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig, use_container_width=True)
+        selectable = [s for s in scenarios if s not in [base_scn, target_scn]]
+
+        if not selectable:
+            st.error("선택할 추가 시나리오가 없습니다. 시트에 정당/시나리오를 더 추가해 주세요.")
+            st.stop()
+
+        sel_scn = st.selectbox("정당/시나리오 선택", selectable)
+
+        def stacked_mix(scn, col):
+            df_plot = energy_df.query("시나리오 == @scn")
+            fig = px.bar(
+                df_plot, x="에너지원", y="비중",
+                color="에너지원", barmode="stack",
+                color_discrete_map=ENERGY_COLORS,
+                title=scn, height=450
+            )
+            fig.update_yaxes(range=[0, 100], title="비중 (%)")
+            fig.update_layout(showlegend=False)
+            col.plotly_chart(fig, use_container_width=True)
+
+        c1, c2, c3 = st.columns(3)
+        stacked_mix(base_scn,   c1)
+        stacked_mix(target_scn, c2)
+        stacked_mix(sel_scn,    c3)
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 3 : Temperature pathways
+# Tab 1 : Temperature pathways
 # ────────────────────────────────────────────────────────────────────#
-with TABS[3]:
+with TABS[1]:
     st.subheader("온도 경로 분석")
 
     if temp_df.empty:
@@ -227,15 +261,28 @@ with TABS[3]:
         st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 4 : Policies
+# Tab 2 : Policy – current election
+# ────────────────────────────────────────────────────────────────────#
+with TABS[2]:
+    st.subheader("정책 비교 – 2025 대선")
+    df_policy_current = load_policy_df(["policy", "정책"])
+    policy_scatter(df_policy_current, "2025 대선 정책 강도 분포")
+
+# ────────────────────────────────────────────────────────────────────#
+# Tab 3 : Policy – previous general election
+# ────────────────────────────────────────────────────────────────────#
+with TABS[3]:
+    st.subheader("정책 비교 – 지난 총선")
+    df_policy_gen = load_policy_df(["총선", "policy_gen"])
+    policy_scatter(df_policy_gen, "지난 총선 정책 강도 분포")
+
+# ────────────────────────────────────────────────────────────────────#
+# Tab 4 : Policy – previous presidential election
 # ────────────────────────────────────────────────────────────────────#
 with TABS[4]:
-    st.subheader("정책 비교")
-
-    if policy_df.empty:
-        st.info("정책 관련 시트를 찾지 못했습니다.")
-    else:
-        st.dataframe(policy_df, use_container_width=True)
+    st.subheader("정책 비교 – 지난 대선")
+    df_policy_prev = load_policy_df(["대선", "policy_prev"])
+    policy_scatter(df_policy_prev, "지난 대선 정책 강도 분포")
 
 # ---------------------------------------------------------------------#
 # 4. Sidebar & footer
