@@ -108,6 +108,9 @@ else:
                                   var_name="시나리오",
                                   value_name="비중"))
 
+    # --- Standardize column names ------------------------------------------------
+    energy_df = energy_df.rename(columns=lambda c: c.strip().replace("(TWh)", "").replace(" ", ""))
+
 # ---- If the sheet uses '발전량' instead of '비중', convert to share (%) ----
 # (Removed automatic share conversion as per instructions)
 
@@ -227,13 +230,29 @@ with TABS[0]:
 
         def stacked_mix(scn, col):
             df_plot = energy_df.query("시나리오 == @scn")
+
+            if "비중" in df_plot.columns:
+                value_col = "비중"
+                y_label   = "비중 (%)"
+            else:
+                # pick the first numeric column that is not '에너지원' or '시나리오'
+                numeric_cols = df_plot.select_dtypes("number").columns
+                value_col = next(col for col in numeric_cols if col not in ["에너지원"])
+                y_label   = value_col
+
             fig = px.bar(
-                df_plot, x="에너지원", y="비중",
-                color="에너지원", barmode="stack",
+                df_plot,
+                x="에너지원",
+                y=value_col,
+                color="에너지원",
+                barmode="stack",
                 color_discrete_map=ENERGY_COLORS,
-                title=scn, height=450
+                title=scn,
+                height=450
             )
-            fig.update_yaxes(range=[0, 100], title="비중 (%)")
+            if value_col == "비중":
+                fig.update_yaxes(range=[0, 100])
+            fig.update_yaxes(title=y_label)
             fig.update_layout(showlegend=False)
             col.plotly_chart(fig, use_container_width=True)
 
