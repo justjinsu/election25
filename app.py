@@ -372,7 +372,7 @@ with TABS[2]:
         party_paths = [p for p in paths_all if p not in ref_paths]
 
         sel_paths = st.multiselect("정당 경로 선택", party_paths,
-                                   default=party_paths[:2] if party_paths else [])
+                                   default=party_paths)  # 모든 경로 기본 선택
         plot_df = temp_df.query("경로 in @ref_paths or 경로 in @sel_paths")
 
         line_dash = plot_df["경로"].apply(
