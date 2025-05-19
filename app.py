@@ -337,16 +337,30 @@ with TABS[4]:
     df_policy_prev = load_policy_df(["대선", "policy_prev"])
     policy_scatter(df_policy_prev, "지난 대선 정책 강도 분포")
 
-# Descriptive text for each energy source
-ENERGY_DESC = {
-    "석탄": "발전 단가는 낮지만 탄소·대기오염이 심각합니다.",
-    "LNG": "유연성은 좋고 미세먼지 적지만 탄소를 배출합니다.",
-    "원자력": "무탄소 베이스로드원이지만 폐기물·안전성 이슈가 있습니다.",
-    "재생에너지": "무탄소·분산 가능, 출력 변동성과 부지 제약이 존재합니다.",
-    "기타": "수력·바이오·연료전지 등 보조 전원입니다."
-}
 
-#
+# 2‑5. Energy source descriptions (optional sheet) --------------------
+# (Load energy source descriptions from sheet if present)
+desc_df_raw = find_sheet(["에너지설명", "energy_desc"])
+if not desc_df_raw.empty and {"energy_source", "description"}.issubset(desc_df_raw.columns):
+    desc_df = desc_df_raw.copy()
+else:
+    desc_df = pd.DataFrame(columns=["energy_source", "description"])
+
+# Helper to get description for an energy source
+def get_energy_desc(source: str) -> str:
+    """Return description text from sheet; fallback to hard‑coded default."""
+    fallback = {
+        "석탄": "발전 단가는 낮지만 탄소·대기오염이 심각합니다.",
+        "LNG": "유연성은 좋고 미세먼지 적지만 탄소를 배출합니다.",
+        "원자력": "무탄소 베이스로드원이지만 폐기물·안전성 이슈가 있습니다.",
+        "재생에너지": "무탄소·분산 가능, 출력 변동성과 부지 제약이 존재합니다.",
+        "기타": "수력·바이오·연료전지 등 보조 전원입니다."
+    }
+    if not desc_df.empty:
+        row = desc_df.loc[desc_df["energy_source"] == source]
+        if not row.empty:
+            return str(row["description"].values[0])
+    return fallback.get(source, "")
 # ────────────────────────────────────────────────────────────────────#
 # Tab 5 : Explanation
 # ────────────────────────────────────────────────────────────────────#
@@ -372,8 +386,8 @@ with TABS[5]:
 ### 에너지원 개념·장단점
 """ , unsafe_allow_html=True)
 
-    for src, txt in ENERGY_DESC.items():
-        st.markdown(f"- **{src}**: {txt}")
+    for src in ["석탄", "LNG", "원자력", "재생에너지", "기타"]:
+        st.markdown(f"- **{src}**: {get_energy_desc(src)}")
 
     st.markdown("""
 ---
