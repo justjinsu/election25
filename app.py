@@ -188,6 +188,9 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
         st.info("정책 데이터를 찾지 못했습니다.")
         return
 
+    # Keep only levels 1, 2, 3 for this visualization
+    policy_df = policy_df.query("level >= 1")
+
     # 정당 필터 (다중 선택)
     all_parties = sorted(policy_df["party"].unique())
     sel_parties = st.multiselect("비교할 정당", all_parties, default=all_parties,
@@ -223,9 +226,9 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
                       marker_size=18,
                       marker_color="#BBBBBB")
     fig.update_xaxes(
-        range=[-2, 3],
-        tickvals=[-2, 0, 1, 2, 3],
-        ticktext=["완화", "유지", "강화(약)", "강화(중)", "강화(강)"]
+        range=[0.5, 3.5],
+        tickvals=[1, 2, 3],
+        ticktext=["공약없음", "정책명시", "정책강화"]
     )
     fig.update_layout(title=title, yaxis_title="", xaxis_title="정책 강도")
     st.plotly_chart(fig, use_container_width=True)
