@@ -214,7 +214,8 @@ st.markdown("<h1 style='text-align:center;'>2025 대선 기후 정책 종합 분
 
 # Top‑level tabs
 TABS = st.tabs([
-    "⚡ 에너지믹스",
+    "⚡ 에너지믹스 (기준·목표·선택)",
+    "⚡ 에너지믹스 후보 비교",
     "🌡 온도경로",
     "📊 정책-대선",
     "📊 정책-지난총선",
@@ -285,9 +286,46 @@ with TABS[0]:
         stacked_mix(sel_scn,    c3)
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 1 : Temperature pathways
+# Tab 1 : Energy mix – all candidates side‑by‑side
 # ────────────────────────────────────────────────────────────────────#
 with TABS[1]:
+    st.subheader("에너지 믹스 – 후보/정당 간 비교")
+
+    if energy_df.empty:
+        st.info("에너지 믹스 시트를 찾지 못했습니다.")
+    else:
+        # 후보 시나리오 = everything except base & target
+        candidate_scn = [s for s in scenarios if s not in [base_scn, target_scn]]
+        if not candidate_scn:
+            st.warning("후보 시나리오가 없습니다.")
+        else:
+            # Show all candidates as stacked bars in one figure
+            fig_all = px.bar(
+                energy_df.query("시나리오 in @candidate_scn"),
+                x="시나리오",
+                y=value_col,
+                color="에너지원",
+                color_discrete_map=ENERGY_COLORS,
+                category_orders={"에너지원": ["석탄","LNG","원자력","재생에너지","기타"]},
+                barmode="stack",
+                height=500
+            )
+            if value_col == "비중":
+                fig_all.update_yaxes(range=[0, 100], title="비중 (%)")
+            else:
+                fig_all.update_yaxes(title=value_col)
+            fig_all.update_layout(legend_title="에너지원")
+            st.plotly_chart(fig_all, use_container_width=True)
+
+            # Add energy source description below
+            with st.expander("에너지원 설명", expanded=False):
+                for src in ["석탄","LNG","원자력","재생에너지","기타"]:
+                    st.markdown(f"- **{src}**: {get_energy_desc(src)}")
+
+# ────────────────────────────────────────────────────────────────────#
+# Tab 2 : Temperature pathways
+# ────────────────────────────────────────────────────────────────────#
+with TABS[2]:
     st.subheader("온도 경로 분석")
 
     if temp_df.empty:
@@ -314,25 +352,25 @@ with TABS[1]:
         st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 2 : Policy – current election
+# Tab 3 : Policy – current election
 # ────────────────────────────────────────────────────────────────────#
-with TABS[2]:
+with TABS[3]:
     st.subheader("정책 비교 – 2025 대선")
     df_policy_current = load_policy_df(["policy", "정책"])
     policy_scatter(df_policy_current, "2025 대선 정책 강도 분포")
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 3 : Policy – previous general election
+# Tab 4 : Policy – previous general election
 # ────────────────────────────────────────────────────────────────────#
-with TABS[3]:
+with TABS[4]:
     st.subheader("정책 비교 – 지난 총선")
     df_policy_gen = load_policy_df(["총선", "policy_gen"])
     policy_scatter(df_policy_gen, "지난 총선 정책 강도 분포")
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 4 : Policy – previous presidential election
+# Tab 5 : Policy – previous presidential election
 # ────────────────────────────────────────────────────────────────────#
-with TABS[4]:
+with TABS[5]:
     st.subheader("정책 비교 – 지난 대선")
     df_policy_prev = load_policy_df(["대선", "policy_prev"])
     policy_scatter(df_policy_prev, "지난 대선 정책 강도 분포")
@@ -362,12 +400,11 @@ def get_energy_desc(source: str) -> str:
             return str(row["description"].values[0])
     return fallback.get(source, "")
 # ────────────────────────────────────────────────────────────────────#
-# Tab 5 : Explanation
+# Tab 6 : Explanation
 # ────────────────────────────────────────────────────────────────────#
-with TABS[5]:
+with TABS[6]:
     st.subheader("대시보드 해설 및 주요 가정")
-    st.success("✅ 설명 탭이 정상적으로 렌더링되었습니다. (이 메시지는 테스트용입니다)")
-
+    
     st.markdown("""
 **에너지 믹스 시각화 의도**  
 > *정확한 수치 예측보다는 ‘기후 투표’ 관점에서 **각 정당이 상상하는 전원(에너지원) 구성을 직관적으로 보여주기** 위한 그래프입니다.*
