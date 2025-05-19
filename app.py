@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from pathlib import Path
+import numpy as np  # for jitter offsets
 
 # ---------------------------------------------------------------------#
 # 0. Page configuration & constants
@@ -86,16 +87,14 @@ parties  = emissions_df["정당"].unique().tolist() if not emissions_df.empty el
 
 # Color palette for energy sources (stacked bar)
 ENERGY_COLORS = {
-    "석탄":   "#4B5563",
-    "LNG":    "#60A5FA",
-    "원자력": "#F59E0B",
-    "태양광": "#FBBF24",
-    "풍력":   "#34D399",
-    "수력":   "#3B82F6",
-    "바이오": "#A855F7",
-    "연료전지": "#10B981",
-    "기타":   "#9CA3AF",
+    "석탄":    "#000000",  # 검정
+    "LNG":     "#808080",  # 회색
+    "원자력":  "#0066FF",  # 파랑
+    "재생에너지": "#22C55E",  # 초록
+    "기타":    "#60A5FA",  # 하늘
     "청정수소/암모니아": "#06B6D4",
+    "바이오":  "#A855F7",
+    "연료전지": "#10B981",
 }
 
 # 2‑2. Energy mix ─────────────────────────────────────────────────────
@@ -172,9 +171,16 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
     if party_filter != "전체":
         policy_df = policy_df.query("party == @party_filter")
 
+    # Jitter duplicates horizontally so all circles are visible
+    parties_local = list(policy_df["party"].unique())
+    offsets = np.linspace(-0.15, 0.15, len(parties_local))
+    offset_map = dict(zip(parties_local, offsets))
+    policy_df = policy_df.assign(level_offset=policy_df.apply(
+        lambda r: r["level"] + offset_map[r["party"]], axis=1))
+
     fig = px.scatter(
         policy_df,
-        x="level",
+        x="level_offset",
         y="category",
         color="party",
         hover_data=["description"],
@@ -182,9 +188,11 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
         height=700,
     )
     fig.update_traces(marker_size=16)
-    fig.update_xaxes(range=[-2, 3],
-                     tickvals=[-2, -1, 0, 1, 2, 3],
-                     ticktext=["완화", "-1", "유지", "강화(약)", "강화(중)", "강화(강)"])
+    fig.update_xaxes(
+        range=[-2, 3],
+        tickvals=[-2, 0, 1, 2, 3],
+        ticktext=["완화", "유지", "강화(약)", "강화(중)", "강화(강)"]
+    )
     fig.update_layout(title=title, yaxis_title="", xaxis_title="정책 강도")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -249,6 +257,7 @@ with TABS[0]:
                 y=value_col,
                 color="에너지원",
                 color_discrete_map=ENERGY_COLORS,
+                category_orders={"에너지원": ["석탄","LNG","원자력","재생에너지","기타"]},
                 barmode="stack",
                 height=450
             )
