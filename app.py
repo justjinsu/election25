@@ -456,4 +456,5 @@ st.sidebar.write(
 st.markdown(
     "<div style='text-align:center; margin-top:3rem; font-size:0.9rem; "
     "color:#666;'>© 2025 기후 정책 분석 대시보드</div>",
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
+)
