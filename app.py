@@ -238,18 +238,69 @@ st.markdown("<h1 style='text-align:center;'>2025 대선 기후 정책 종합 분
 
 # Top‑level tabs
 TABS = st.tabs([
-    "⚡ 에너지믹스 (기준·목표·선택)",
-    "⚡ 에너지믹스 후보 비교",
-    "🌡 온도경로",
-    "📊 정책-대선",
-    "📊 정책-지난총선",
-    "ℹ️ 설명"
+    "⚡ 에너지믹스 후보 비교",          # index 0
+    "⚡ 에너지믹스 (기준·목표·선택)",  # index 1
+    "🌡 온도경로",                    # 2
+    "📊 정책-대선",                  # 3
+    "📊 정책-지난총선",              # 4
+    "ℹ️ 설명"                        # 5
 ])
 
 # ────────────────────────────────────────────────────────────────────#
-# Tab 0 : Energy mix (stacked bars 2018 ‑ 2035 ‑ selected)
+# Tab 0 : Energy mix – all candidates side‑by‑side
 # ────────────────────────────────────────────────────────────────────#
 with TABS[0]:
+    st.subheader("에너지 믹스 – 후보/정당 간 비교")
+
+    # Recompute scenario list locally
+    scenarios = energy_df["시나리오"].unique().tolist() if not energy_df.empty else []
+    base_scn   = "정부(실적)-2018"
+    target_scn = "정부(계획)-2040"
+
+    if energy_df.empty:
+        st.info("에너지 믹스 시트를 찾지 못했습니다.")
+    else:
+        # 후보 시나리오 = everything except base & target
+        candidate_scn = [s for s in scenarios if s not in [base_scn, target_scn]]
+        if not candidate_scn:
+            st.warning("후보 시나리오가 없습니다.")
+        else:
+            # determine which numeric column to use
+            if "비중" in energy_df.columns:
+                value_col = "비중"
+            else:
+                numeric_cols = energy_df.select_dtypes("number").columns
+                value_col = next(col for col in numeric_cols if col not in ["에너지원"])
+            fig_all = px.bar(
+                energy_df.query("시나리오 in @candidate_scn"),
+                y="시나리오",
+                x=value_col,
+                color="에너지원",
+                orientation="h",
+                color_discrete_map=ENERGY_COLORS,
+                category_orders={
+                    "에너지원": ["석탄","LNG","원자력","재생에너지","기타"],
+                    "시나리오": candidate_scn  # keep order as in data
+                },
+                barmode="stack",
+                height=500
+            )
+            if value_col == "비중":
+                fig_all.update_xaxes(range=[0, 100], title="비중 (%)")
+            else:
+                fig_all.update_xaxes(title=value_col)
+            fig_all.update_layout(legend_title="에너지원")
+            st.plotly_chart(fig_all, use_container_width=True)
+
+            # Add energy source description below
+            with st.expander("주요 정당별 가정", expanded=False):
+                for src in ["석탄","LNG","원자력","재생에너지","기타"]:
+                    st.markdown(f"- **{src}**: {get_energy_desc(src)}")
+
+# ────────────────────────────────────────────────────────────────────#
+# Tab 1 : Energy mix (기준·목표·선택)
+# ────────────────────────────────────────────────────────────────────#
+with TABS[1]:
     st.subheader("에너지 믹스 – 2018 vs 2035 vs 선택 시나리오")
 
     if energy_df.empty:
@@ -308,50 +359,7 @@ with TABS[0]:
         stacked_mix(target_scn, c2)
         stacked_mix(sel_scn,    c3)
 
-# ────────────────────────────────────────────────────────────────────#
-# Tab 1 : Energy mix – all candidates side‑by‑side
-# ────────────────────────────────────────────────────────────────────#
-with TABS[1]:
-    st.subheader("에너지 믹스 – 후보/정당 간 비교")
-
-    if energy_df.empty:
-        st.info("에너지 믹스 시트를 찾지 못했습니다.")
-    else:
-        # 후보 시나리오 = everything except base & target
-        candidate_scn = [s for s in scenarios if s not in [base_scn, target_scn]]
-        if not candidate_scn:
-            st.warning("후보 시나리오가 없습니다.")
-        else:
-            # Show all candidates as stacked bars in one figure
-            # determine which numeric column to use
-            if "비중" in energy_df.columns:
-                value_col = "비중"
-            else:
-                numeric_cols = energy_df.select_dtypes("number").columns
-                value_col = next(col for col in numeric_cols if col not in ["에너지원"])
-            fig_all = px.bar(
-                energy_df.query("시나리오 in @candidate_scn"),
-                x="시나리오",
-                y=value_col,
-                color="에너지원",
-                color_discrete_map=ENERGY_COLORS,
-                category_orders={"에너지원": ["석탄","LNG","원자력","재생에너지","기타"]},
-                barmode="stack",
-                height=500
-            )
-            if value_col == "비중":
-                fig_all.update_yaxes(range=[0, 100], title="비중 (%)")
-            else:
-                fig_all.update_yaxes(title=value_col)
-            fig_all.update_layout(legend_title="에너지원")
-            st.plotly_chart(fig_all, use_container_width=True)
-
-            # Add energy source description below
-            with st.expander("에너지원 설명", expanded=False):
-                for src in ["석탄","LNG","원자력","재생에너지","기타"]:
-                    st.markdown(f"- **{src}**: {get_energy_desc(src)}")
-
-# ────────────────────────────────────────────────────────────────────#
+#
 # Tab 2 : Temperature pathways
 # ────────────────────────────────────────────────────────────────────#
 with TABS[2]:
