@@ -299,23 +299,23 @@ with TABS[1]:
         if not candidate_scn:
             st.warning("후보 시나리오가 없습니다.")
         else:
-        # Show all candidates as stacked bars in one figure
-        # determine which numeric column to use
-        if "비중" in energy_df.columns:
-            value_col = "비중"
-        else:
-            numeric_cols = energy_df.select_dtypes("number").columns
-            value_col = next(col for col in numeric_cols if col not in ["에너지원"])
-        fig_all = px.bar(
-            energy_df.query("시나리오 in @candidate_scn"),
-            x="시나리오",
-            y=value_col,
-            color="에너지원",
-            color_discrete_map=ENERGY_COLORS,
-            category_orders={"에너지원": ["석탄","LNG","원자력","재생에너지","기타"]},
-            barmode="stack",
-            height=500
-        )
+            # Show all candidates as stacked bars in one figure
+            # determine which numeric column to use
+            if "비중" in energy_df.columns:
+                value_col = "비중"
+            else:
+                numeric_cols = energy_df.select_dtypes("number").columns
+                value_col = next(col for col in numeric_cols if col not in ["에너지원"])
+            fig_all = px.bar(
+                energy_df.query("시나리오 in @candidate_scn"),
+                x="시나리오",
+                y=value_col,
+                color="에너지원",
+                color_discrete_map=ENERGY_COLORS,
+                category_orders={"에너지원": ["석탄","LNG","원자력","재생에너지","기타"]},
+                barmode="stack",
+                height=500
+            )
             if value_col == "비중":
                 fig_all.update_yaxes(range=[0, 100], title="비중 (%)")
             else:
