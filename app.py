@@ -164,12 +164,12 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
         st.info("정책 데이터를 찾지 못했습니다.")
         return
 
-    # 정당 필터
+    # 정당 필터 (다중 선택)
     all_parties = sorted(policy_df["party"].unique())
-    party_filter = st.radio("정당 선택", ["전체"] + all_parties,
-                            horizontal=True, key=f"filter_{title}")
-    if party_filter != "전체":
-        policy_df = policy_df.query("party == @party_filter")
+    sel_parties = st.multiselect("비교할 정당", all_parties, default=all_parties,
+                                 key=f"filter_{title}", placeholder="정당 선택")
+    if sel_parties:
+        policy_df = policy_df.query("party in @sel_parties")
 
     # Jitter duplicates horizontally so all circles are visible
     parties_local = list(policy_df["party"].unique())
@@ -178,16 +178,26 @@ def policy_scatter(policy_df: pd.DataFrame, title: str):
     policy_df = policy_df.assign(level_offset=policy_df.apply(
         lambda r: r["level"] + offset_map[r["party"]], axis=1))
 
+    policy_df["symbol"] = policy_df["level"].apply(
+        lambda v: 'x' if pd.isna(v) else 'circle'
+    )
+
     fig = px.scatter(
         policy_df,
         x="level_offset",
         y="category",
         color="party",
+        symbol="symbol",
+        symbol_map={'circle':'circle','x':'x'},
         hover_data=["description"],
         color_discrete_map=PARTY_COLORS,
         height=700,
     )
     fig.update_traces(marker_size=16)
+    # Make 'X' markers bigger & grey
+    fig.update_traces(selector=dict(symbol='x'),
+                      marker_size=18,
+                      marker_color="#BBBBBB")
     fig.update_xaxes(
         range=[-2, 3],
         tickvals=[-2, 0, 1, 2, 3],
@@ -266,7 +276,7 @@ with TABS[0]:
                 fig.update_yaxes(range=[0, 100])
             fig.update_xaxes(title="")
             fig.update_yaxes(title=y_label)
-            fig.update_layout(showlegend=False, title=scn)
+            fig.update_layout(showlegend=True, legend_title="에너지원", title=scn)
             col.plotly_chart(fig, use_container_width=True)
 
         c1, c2, c3 = st.columns(3)
@@ -327,6 +337,15 @@ with TABS[4]:
     df_policy_prev = load_policy_df(["대선", "policy_prev"])
     policy_scatter(df_policy_prev, "지난 대선 정책 강도 분포")
 
+# Descriptive text for each energy source
+ENERGY_DESC = {
+    "석탄": "발전 단가는 낮지만 탄소·대기오염이 심각합니다.",
+    "LNG": "유연성은 좋고 미세먼지 적지만 탄소를 배출합니다.",
+    "원자력": "무탄소 베이스로드원이지만 폐기물·안전성 이슈가 있습니다.",
+    "재생에너지": "무탄소·분산 가능, 출력 변동성과 부지 제약이 존재합니다.",
+    "기타": "수력·바이오·연료전지 등 보조 전원입니다."
+}
+
 #
 # ────────────────────────────────────────────────────────────────────#
 # Tab 5 : Explanation
@@ -336,30 +355,34 @@ with TABS[5]:
 
     st.markdown("""
 **에너지 믹스 시각화 의도**  
-> *정확한 수치 예측보다는 ‘기후 투표’ 관점에서 **각 정당이 상상하는 전원(에너지원) 구성을 직관적으로 보여주기** 위해 제작되었습니다.*
+> *정확한 수치 예측보다는 ‘기후 투표’ 관점에서 **각 정당이 상상하는 전원(에너지원) 구성을 직관적으로 보여주기** 위한 그래프입니다.*
 
 ---
 
-### 주요 가정 (총 발전량·연도)
+### 주요 가정 (총 발전량·연도)
 | 구분 | 총 발전량 (TWh) | 출처·메모 |
 |------|----------------|-----------|
-| **2018년 정부 실적** | **540** | 한국에너지공단·한전 통계 |
-| **2038년 정부 계획** | **703.5** | 제11차 전력수급기본계획(실무안) |
-| **2040·2035년 예측** | **700** | 모든 시나리오 동일, 연 1 % 증가 가정 |
+| 2018년 정부 실적 | 540 | 한국에너지공단·한전 통계 |
+| 2038년 정부 계획 | 703.5 | 제11차 전력수급기본계획(실무안) |
+| 2040·2035년 예측 | 700 | 모든 시나리오 동일, 연 1 % 증가 가정 |
 
 ---
 
-### 후보별 공약 반영 방식
+### 에너지원 개념·장단점
+""" , unsafe_allow_html=True)
 
-| 정당·후보 | 핵심 가정 |
-|-----------|-----------|
-| **민주당‑이재명** | • 2040 석탄 100 % 폐쇄<br>• LNG 10 % 유지 (정부 2038 계획 수준)<br>• 재생에너지 54.5 % (서해안 20 GW 해상풍력) |
-| **국민의힘‑김문수** | • 원전 60 % (대형 6기 + SMR 1기)<br>• LNG 15 % (2023‑04 정책발표) |
-| **개혁신당‑이준석** | • 구체 수치 없음 → 2038 정부 계획 수치 사용 |
-| **민주노동당‑권영국** | • 2035 재생에너지 60 % (공공재생에너지 확대)<br>• LNG 10 % (화석연료 보조금 폐지 가정) |
+    for src, txt in ENERGY_DESC.items():
+        st.markdown(f"- **{src}**: {txt}")
 
+    st.markdown("""
 ---
-""", unsafe_allow_html=True)
+
+### 후보별 요약 코멘트
+* **민주당‑이재명** – 재생에너지 54.5 % 확대는 긍정적이나 LNG 10 % 잔존 부담  
+* **국민의힘‑김문수** – 원전 60 %로 무탄소 확대 (대형 6기+SMR), 안전·속도 리스크  
+* **개혁신당‑이준석** – 정부 계획 준용, 정책 구체성 부족  
+* **민주노동당‑권영국** – 2035 재생 60 %로 급진 감축, 산업 충격 가능성
+""")
 
 # ---------------------------------------------------------------------#
 # 4. Sidebar & footer
