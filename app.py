@@ -295,10 +295,6 @@ with TABS[0]:
             fig_all.update_layout(legend_title="에너지원")
             st.plotly_chart(fig_all, use_container_width=True)
 
-            # Add energy source description below
-            with st.expander("주요 정당별 가정", expanded=False):
-                for src in ["석탄","LNG","원자력","재생에너지","기타"]:
-                    st.markdown(f"- **{src}**: {get_energy_desc(src)}")
 
 # ────────────────────────────────────────────────────────────────────#
 # Tab 1 : Energy mix (기준·목표·선택)
@@ -431,8 +427,16 @@ with TABS[5]:
 ### 에너지원 개념·장단점
 """ , unsafe_allow_html=True)
 
-    for src in ["석탄", "LNG", "원자력", "재생에너지", "기타"]:
-        st.markdown(f"- **{src}**: {get_energy_desc(src)}")
+
+    st.markdown("""
+| 에너지원 | 장점 | 단점 |
+|----------|------|------|
+| **석탄** | 발전 단가가 낮고 기 설치 설비 활용 가능 | 탄소·미세먼지 배출이 가장 심각 |
+| **LNG** | 출력 조절이 용이해 신재생 변동성 보완 | 여전히 화석연료·메탄 누출 우려 |
+| **원자력** | 무탄소·베이스로드 역할, 단가 안정 | 안전성·폐기물·건설 기간/비용 |
+| **재생에너지** | 무탄소·분산형, 연료비 없음 | 간헐성·부지 한계·계통 보강 비용 |
+| **기타**<br>(수력·바이오 등) | 보조전원·저탄소 대안 | 자원 제약, 환경·원료 지속가능성 |
+""", unsafe_allow_html=True)
 
     # --------------------------- NEW SECTIONS ---------------------------
     st.markdown("""
