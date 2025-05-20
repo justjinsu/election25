@@ -386,10 +386,13 @@ with TABS[2]:
             labels={"배출량": "배출량 (백만톤 CO₂eq)"}, height=600
         )
 
-        # Make reference (°C) paths thicker and solid black
+        # Make reference (°C) paths thick black, and increase others by one step
         for t in fig.data:
             if "°C" in t.name:
-                t.update(line=dict(width=4, color="#000000"))
+                t.update(line=dict(width=7, color="#000000"))  # reference paths
+            else:
+                current = t.line.width or 2
+                t.update(line=dict(width=current + 1))         # party paths +1 px
         st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
