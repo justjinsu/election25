@@ -382,9 +382,14 @@ with TABS[2]:
             plot_df, x="연도", y="배출량", color="경로",
             line_dash=line_dash,
             color_discrete_map={**cmap(sel_paths),
-                                **{p: "#444444" for p in ref_paths}},
+                                **{p: "#000000" for p in ref_paths}},   # reference paths in black
             labels={"배출량": "배출량 (백만톤 CO₂eq)"}, height=600
         )
+
+        # Make reference (°C) paths thicker and solid black
+        for t in fig.data:
+            if "°C" in t.name:
+                t.update(line=dict(width=4, color="#000000"))
         st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────#
