@@ -258,7 +258,7 @@ with TABS[0]:
     # Recompute scenario list locally
     scenarios = energy_df["시나리오"].unique().tolist() if not energy_df.empty else []
     base_scn   = "정부(실적)-2018"
-    target_scn = "정부(계획)-2040"
+    target_scn = "정부(계획)-2038"
 
     if energy_df.empty:
         st.info("에너지 믹스 시트를 찾지 못했습니다.")
@@ -307,7 +307,7 @@ with TABS[1]:
     else:
         scenarios = energy_df["시나리오"].unique().tolist()
         base_scn   = "정부(실적)-2018"
-        target_scn = "정부(계획)-2040"
+        target_scn = "정부(계획)-2038"
         if base_scn not in scenarios or target_scn not in scenarios:
             st.error("에너지 믹스 시트에 기준·목표 시나리오 이름이 없습니다. "
                      "현재 시나리오 목록: " + ", ".join(scenarios))
