@@ -300,7 +300,7 @@ with TABS[0]:
 # Tab 1 : Energy mix (기준·목표·선택)
 # ────────────────────────────────────────────────────────────────────#
 with TABS[1]:
-    st.subheader("에너지 믹스 – 2018 vs 2035 vs 선택 시나리오")
+    st.subheader("에너지 믹스 – 2018 vs 2038 vs 선택 시나리오")
 
     if energy_df.empty:
         st.info("에너지 믹스 시트를 찾지 못했습니다.")
